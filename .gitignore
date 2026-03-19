@@ -1,0 +1,16 @@
+# PyInstaller folders
+build/
+dist/
+*.spec
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs
+*.log
