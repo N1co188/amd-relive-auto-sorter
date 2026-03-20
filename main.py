@@ -68,6 +68,8 @@ def rename_file_safe(filepath):
     if not filepath.lower().endswith('.mp4'):
         return
 
+    filename = os.path.basename(filepath)
+
     # Skip temp files created by AMD (like out.mp4 or files ending in .tmp)
     if filename.lower() == 'out.mp4' or filename.lower().startswith('~') or '.tmp' in filename.lower():
         return
