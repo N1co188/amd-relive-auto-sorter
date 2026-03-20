@@ -80,7 +80,8 @@ def get_optimal_filename(filepath):
 
     # If the game folder corresponds to the main ReLive folder, we don't have a game name
     if game_dir.lower().rstrip('\\') == BASE_DIR.lower().rstrip('\\'):
-        game_name = "Unknown Game"
+        game_name = "Unknown"
+        game_dir = os.path.join(BASE_DIR, "Unknown")
 
     # os.path.getmtime is slightly safer for media files in case they were copied
     mtime = os.path.getmtime(filepath)
