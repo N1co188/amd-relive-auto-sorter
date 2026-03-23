@@ -6,6 +6,7 @@ An automated background tool that smartly renames, sorts, and organizes game cli
 * **Modern GUI Settings:** A sleek, dark-mode settings panel (built with CustomTkinter) configurable directly from the system tray.
 * **Automatic Renaming:** Chooses from multiple naming formats (e.g., `YYYY-MM-DD_HH-MM-SS - GameName.mp4`, `GameName_YYYYMMDD_HHMMSS.mp4`, etc.).
 * **Daily Subfolders:** Optional feature to automatically move clips into `YYYY-MM-DD` daily subfolders.
+* **Auto-Backup & Folder Mirroring:** Set a custom backup directory. The tool will safely mirror your entire organized clip library and folder structure in the background 30 seconds after a new clip is recorded.
 * **Smart Detection:** Automatically locates your `Videos\Radeon ReLive` directory on Windows and ignores temporary AMD `.tmp` or `out.mp4` render files.
 * **Background Process:** Sits quietly in the system tray with a custom matching icon.
 * **Real-Time Monitoring:** Watches for new clips and safely renames them the exact moment AMD finishes writing the file.

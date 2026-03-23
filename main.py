@@ -8,7 +8,8 @@ from datetime import datetime
 
 # GUI Imports
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
+import shutil
 
 # Logging
 LOG_FILE = os.path.join(os.environ.get('TEMP', 'C:\\'), 'amd_clip_sorter.log')
@@ -61,6 +62,43 @@ def save_config(config_data):
             json.dump(config_data, f)
     except Exception as e:
         log_debug(f"Error saving config: {e}")
+
+_sync_lock = threading.Lock()
+
+def sync_backup_folder():
+    """Syncs the entire BASE_DIR to the backup folder. Only copies missing files."""
+    with _sync_lock:
+        config = load_config()
+        if not config.get("copy_enabled", False):
+            return
+            
+        copy_path = config.get("copy_path", "")
+        if not copy_path or not os.path.exists(copy_path):
+            return
+            
+        log_debug("Starting comprehensive sync to backup folder...")
+        synced_count = 0
+        for root, dirs, files in os.walk(BASE_DIR):
+            for file in files:
+                if file.lower().endswith('.mp4'):
+                    src = os.path.join(root, file)
+                    rel_path = os.path.relpath(src, BASE_DIR)
+                    dest = os.path.join(copy_path, rel_path)
+                    
+                    if not os.path.exists(dest):
+                        try:
+                            os.makedirs(os.path.dirname(dest), exist_ok=True)
+                            shutil.copy2(src, dest)
+                            synced_count += 1
+                        except Exception as e:
+                            log_debug(f"Failed to sync {file}: {e}")
+        
+        if synced_count > 0:
+            log_debug(f"Backup sync finished. Successfully mirrored {synced_count} clips.")
+
+def trigger_delayed_sync():
+    """Starts the sync process after 30 seconds to ensure AMD is done writing/locking."""
+    threading.Timer(30.0, sync_backup_folder).start()
 
 def get_optimal_filename(filepath):
     """
@@ -166,6 +204,9 @@ def rename_file_safe(filepath):
                     except:
                         pass
             
+            # TRIGGER DELAYED BACKUP: Wait safely for 30 seconds, then mirror all modifications properly.
+            trigger_delayed_sync()
+            
             return True
         except PermissionError:
             time.sleep(1)
@@ -190,6 +231,9 @@ def process_existing_files(show_done_message=False):
                     renamed_count += 1
     
     log_debug(f"Finished processing existing clips. Renamed {renamed_count} files.\n")
+    
+    # Run a full sync sweep after updating existing files
+    trigger_delayed_sync()
     
     if show_done_message and renamed_count > 0:
         # Create a tiny invisible root just to show the messagebox successfully
@@ -236,7 +280,7 @@ def _run_ctk_app():
     root.title(" AMD Clip Sorter Settings")
     
     window_width = 620
-    window_height = 480
+    window_height = 580
     screen_width = root.winfo_screenwidth()
     screen_height = root.winfo_screenheight()
     x_cordinate = int((screen_width/2) - (window_width/2))
@@ -287,6 +331,8 @@ def _run_ctk_app():
     current_config = load_config()
     current_fmt = current_config.get("format", "1")
     current_sort_by_date = current_config.get("sort_by_date", False)
+    current_copy_enabled = current_config.get("copy_enabled", False)
+    current_copy_path = current_config.get("copy_path", "")
     
     format_var = ctk.StringVar(value=formats.get(current_fmt, formats["1"]))
     
@@ -311,7 +357,7 @@ def _run_ctk_app():
     
     # Toggle Switch Field
     switch_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
-    switch_frame.pack(fill="x", padx=20, pady=(15, 20))
+    switch_frame.pack(fill="x", padx=20, pady=(15, 10))
     
     sort_var = ctk.BooleanVar(value=current_sort_by_date)
     switch = ctk.CTkSwitch(switch_frame, text="Sort into Daily Folders (YYYY-MM-DD)", 
@@ -319,6 +365,36 @@ def _run_ctk_app():
                            progress_color="#e50914", button_color="white", button_hover_color="#ebebeb")
     switch.pack(anchor="w")
     ctk.CTkLabel(switch_frame, text="Automatically moves clips into subfolders based on creation date.", font=ctk.CTkFont(family="Segoe UI", size=12), text_color="gray55").pack(anchor="w", padx=(45, 0), pady=(0, 5))
+    
+    # Backup/Copy Field
+    backup_frame = ctk.CTkFrame(content_frame, fg_color="transparent")
+    backup_frame.pack(fill="x", padx=20, pady=(10, 20))
+    
+    copy_var = ctk.BooleanVar(value=current_copy_enabled)
+    copy_switch = ctk.CTkSwitch(backup_frame, text="Backup Copies to Custom Folder", 
+                           variable=copy_var, font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
+                           progress_color="#e50914", button_color="white", button_hover_color="#ebebeb")
+    copy_switch.pack(anchor="w")
+    ctk.CTkLabel(backup_frame, text="Saves an additional copy of the named clip in another path.", font=ctk.CTkFont(family="Segoe UI", size=12), text_color="gray55").pack(anchor="w", padx=(45, 0), pady=(0, 5))
+    
+    path_row = ctk.CTkFrame(backup_frame, fg_color="transparent")
+    path_row.pack(fill="x", pady=(5, 0), padx=(45, 0))
+    
+    copy_path_var = ctk.StringVar(value=current_copy_path)
+    path_entry = ctk.CTkEntry(path_row, textvariable=copy_path_var, width=320, height=35, 
+                              fg_color="#282828", border_color="#333",
+                              placeholder_text="No folder selected...")
+    path_entry.pack(side="left", padx=(0, 10))
+    
+    def browse_folder():
+        # Temporary normal tkinter root to handle filedialog so it doesn't glitch behind the TopMost window
+        folder = filedialog.askdirectory(title="Select Backup Folder")
+        if folder:
+            copy_path_var.set(folder)
+            
+    browse_btn = ctk.CTkButton(path_row, text="Browse", command=browse_folder, 
+                               width=80, height=35, fg_color="#333", hover_color="#444")
+    browse_btn.pack(side="left")
     
     # Bottom Bar inside Card
     bottom_frame = ctk.CTkFrame(content_frame, fg_color="transparent", height=60)
@@ -334,7 +410,9 @@ def _run_ctk_app():
         
         save_config({
             "format": selected_key,
-            "sort_by_date": sort_var.get()
+            "sort_by_date": sort_var.get(),
+            "copy_enabled": copy_var.get(),
+            "copy_path": copy_path_var.get()
         })
         root.destroy()
         
